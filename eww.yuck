@@ -1,0 +1,140 @@
+(deflisten niri `eww-niri`)
+
+(deflisten music 'local-mpris fooyin')
+
+(defpoll soundvol
+  :initial "1"
+  :interval "100ms"
+  `wpctl get-volume @DEFAULT_AUDIO_SINK@ | cut -d ' ' -f 2-`)
+
+(defpoll sinkname
+  :interval "100ms"
+  `wpctl inspect @DEFAULT_AUDIO_SINK@ | grep alsa.card_name | xargs | cut -d ' ' -f 3-`)
+
+(defwidget workspaces [ monitor ]
+  (box
+    :orientation "h"
+    :space-evenly false
+    :halign "start"
+    :hexpand true
+    (for wsp in { niri.outputs[monitor].workspaces }
+      (box
+        :class "workspace ${wsp.is_urgent ? 'urgent' : ''} ${wsp.is_focused ? 'focused' : ''} ${wsp.is_active ? 'active' : ''}"
+        :visible { arraylength(wsp.columns) == 0&& ! wsp.is_active ? false : true }
+        "${wsp.index}"))))
+
+(defwidget windowtitle [ ]
+  (box
+    :halign "start"
+    :orientation "h"
+    :hexpand true
+    :visible { niri?.title == "null" ? false : true }
+    (label
+      :class "windowtitle"
+      :text "${niri?.title}"
+      :limit-width 50
+      :justify "left")))
+
+(defwidget leftstuff [ monitor ]
+  (box
+    :orientation "h"
+    :class "container left"
+    :space-evenly false
+    :halign "start"
+    (workspaces
+      :monitor monitor)
+    (windowtitle)))
+
+(defwidget time [ ]
+  (box
+    :class "timebox ${music.status}"
+    :orientation "h"
+
+    (label
+      :class "music ${music.status}"
+      :text "${formattime(EWW_TIME,'%e %a %H:%M')}")))
+
+(defwidget music [ ]
+  (box
+    :visible { music.status != "Quit"&&music.title != "" }
+    :orientation "v"
+    :class "musicbox ${music.status}"
+    :space-evenly false
+
+    (progress
+      :orientation "h"
+      :class "musicbar ${music.status}"
+      :value { music.duration == 0 ? 0 : music.position / music.duration * 100 })
+
+    (label
+      :limit-width 100
+      :class "music ${music.status}"
+      :text "${music?.artist} - ${music?.title}")))
+
+(defwidget centerstuff [ ]
+  (box
+    :halign "center"
+    :class "container center"
+    :space-evenly false
+    :orientation "h"
+    (time)
+    (music)))
+
+(defwidget memstats [ ]
+  (label
+    :class "text"
+    :text "RAM: ${formatbytes(round(EWW_RAM.used_mem,0),true,"iec")} / ${formatbytes(EWW_RAM.total_mem,true,"iec")}"))
+
+(defwidget cpustats [ ]
+  (label
+    :class "text"
+    :text "CPU: ${round(EWW_CPU.avg,0)}%"))
+
+(defwidget sound [ ]
+  (button
+    :onclick "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
+    :onrightclick "~/scripts/changesink"
+    (label
+      :class "text"
+      :text "${sinkname} ${matches(soundvol,'.+\[MUTED\]') ? 'MUTED' : '${soundvol * 100}%'}")))
+
+(defwidget layout [ ]
+  (label
+    :class "text"
+    :text "${niri.layout}"))
+
+(defwidget rightstuff [ ]
+  (box
+    :class "bar"
+    :halign "end"
+    :space-evenly false
+    :orientation "h"
+    :class "container right"
+
+    (memstats)
+    (cpustats)
+    (sound)
+    (layout)))
+
+(defwidget mainbar [ monitor ]
+  (centerbox
+    (leftstuff
+      :monitor monitor)
+
+    (centerstuff)
+
+    (rightstuff)))
+
+(defwindow bar
+  :monitor "DP-2"
+  :geometry
+  (geometry
+    :x "0px"
+    :y "0px"
+    :width "100%"
+    :height "30px"
+    :anchor "top center")
+  :exclusive true
+  :focusable false
+  (mainbar
+    :monitor "DP-2"))
